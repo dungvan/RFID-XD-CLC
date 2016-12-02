@@ -25,6 +25,7 @@ void change_led_position();
 void readCard();
 /*mo-dong cong*/
 void open_door(byte in, byte out);
+void SerialPrint();
 
 byte red[10] = {3, 6, 9, 22, 25, 28, 31, 34, 37, 40};
 byte green[10] = {4, 7, 10, 23, 26, 29, 32, 35, 38, 41};
@@ -88,7 +89,10 @@ typedef struct id_value {
 id_value temp_value_in;
 id_value temp_value_out;
 id_value id_values[10];
-byte numberOfCar = 0;
+int numberOfCar = 0;
+int lastNumberOfCar = 0;
+int checkIncreaseNumberOfCar = 0;
+int checkDecreaseNumberOfCar = 0;
 byte fullList = 0;
 
 int pos_in = 180;
@@ -148,14 +152,14 @@ void setup()
   ServoOut.write(90);
 
   pinMode(buttonPin, INPUT);
-  
+
   SPI.begin();
   rfid.init();
 }
 
 void loop()
 {
-  Serial.println(digitalRead(49));
+  //  Serial.println(digitalRead(49));
   lcdDisplay();
   change_led_position();
   if (rfid.isCard()) {
@@ -191,7 +195,7 @@ void loop()
       if (!in_door)
       {
         open_door(in);
-      }else {
+      } else {
         close_door(in);
         save_id = 0;
       }
@@ -235,7 +239,7 @@ void readCard(byte direct) {
       if (checkIdFromList(direct) < 10) return;
       temp_value_in.checkExitsInList = 1;
       saveIdToList();
-      SerialPrint();
+      //      SerialPrint();
     } else {
       temp_value_out.num0 = rfid.serNum[0];
       temp_value_out.num1 = rfid.serNum[1];
@@ -251,7 +255,7 @@ void readCard(byte direct) {
       temp_value_in.num2 = 0;
       temp_value_in.num3 = 0;
       temp_value_in.num4 = 0;
-      SerialPrint();
+      //      SerialPrint();
     }
     //Serial.println(" ");
     Serial.println("Ma Card:");
@@ -275,25 +279,35 @@ void open_door(byte direct) {
     for (pos_in; pos_in >= 87; pos_in -= 1) {
       ServoIn.write(pos_in);
     }
-    numberOfCar++;
+    if (!checkIncreaseNumberOfCar){
+      numberOfCar++;
+      checkIncreaseNumberOfCar = 1;
+    }
+    Serial.print("\t\t");
+    Serial.println(numberOfCar);
   }
   else {
     for (pos_out; pos_out >= 0; pos_out -= 1) {
       ServoOut.write(pos_out);
     }
-    numberOfCar--;
+    if(!checkDecreaseNumberOfCar){
+       numberOfCar--;
+       checkDecreaseNumberOfCar = 1;
+    }
   }
 }
 void close_door(byte direct) {
   delay(700);
-  if (direct){
+  if (direct) {
     for (pos_in; pos_in <= 180; pos_in += 1) {
       ServoIn.write(pos_in);
     }
-  }else{
+    checkIncreaseNumberOfCar = 0;
+  } else {
     for (pos_out; pos_out <= 85; pos_out += 1) {
       ServoOut.write(pos_out);
     }
+    checkDecreaseNumberOfCar = 0;
   }
 }
 
@@ -339,9 +353,8 @@ void saveIdToList() {
       id_values[index].num3 = temp_value_in.num3;
       id_values[index].num4 = temp_value_in.num4;
       id_values[index].checkExitsInList = temp_value_in.checkExitsInList;
-      numberOfCar++;
       save_id = 1;
-      Serial.println(save_id);
+      //      Serial.println(save_id);
       if (index == 9) fullList = 1;
       return;
     }
@@ -369,7 +382,7 @@ int checkIdFromList(byte direct) {
   int result;
   int index = 0;
   for (index; index < 10; index++) {
-    Serial.println(index);
+    //    Serial.println(index);
     if (id_values[index].checkExitsInList
         && id_values[index].num0 == temp_value.num0
         && id_values[index].num1 == temp_value.num1
@@ -395,41 +408,60 @@ void removeFromList(byte index) {
 }
 void lcdDisplay() {
   buttonState = digitalRead(buttonPin);
-  if(buttonState){
+  if (buttonState) {
+    if (!buttonLastState) {
+      lcd.clear();
+      char c[] = {'T', 'O', 'N', 'G', ' ', 'X', 'E', ':'};
+      for (int i; i < sizeof(c) / sizeof(c[0]); i++) {
+        lcd.setCursor(i, 0);
+        lcd.print(c[i]);
+      }
+      for (int i; i < 16; i++) {
+        lcd.setCursor(i, 1);
+        lcd.print(" ");
+      }
+    }
     lastNumberOfFreePosition1 = lastNumberOfFreePosition2 = -1;
-    lcd.clear();
-    int n = numberOfCar; 
-    char c[] = {'T','O','N','G',' ','S','O',' ','X','E',':'};
-    for(int i; i < sizeof(c)/sizeof(c[0]); i++){
-      lcd.setCursor(i,0);
-      lcd.print(c[i]);
-    }
-    char d[] = {0x30, 0x30, 0x30, 0x30, 0x30};
-    int i = 0;
-    while(n / 10){
-      d[i] += n%10;
-      n/=10;
-      i++;
-    }
-    d[i] += n;
-    for(i; i >= 0; i--){
-      if(d[i] == 0x30) continue;
-      lcd.setCursor(i + sizeof(c)/sizeof(c[0]), 0);
-      lcd.print(d[i]);
-    }
-    buttonLastState = 1;
+//    if (lastNumberOfCar != numberOfCar) {
+      int n = numberOfCar;
+      char d[] = {0x30, 0x30, 0x30, 0x30};
+      int i = 0;
+      while (n / 10) {
+        d[i] += n % 10;
+        n /= 10;
+        i++;
+      }
+      d[i] += n;
+      for (i; i >= 0; i--) {
+        Serial.print(d[i]); Serial.print("\t");
+        lcd.setCursor(i + 12, 0);
+        lcd.print(d[i]);
+      }
+//      lastNumberOfCar = numberOfCar;
+//    }
+    buttonLastState = buttonState;
     return;
   }
   byte up = defaultNumberOfFreePosition + numberOfFreePosition1;
-  lcdDisplayCharArray(up, lastNumberOfFreePosition1, 2, 0);
-  lastNumberOfFreePosition1 = up;
   byte left = defaultNumberOfFreePosition + numberOfFreePosition2;
-  lcdDisplayCharArray(left, lastNumberOfFreePosition2, 3, 1);
-  lastNumberOfFreePosition2 = left;
+  if (lastNumberOfFreePosition1 != up && lastNumberOfFreePosition2 != left)
+  {
+    lcd.clear();
+    lcdDisplayCharArray(up, lastNumberOfFreePosition1, 2, 0);
+    lcdDisplayCharArray(left, lastNumberOfFreePosition2, 3, 1);
+    lastNumberOfFreePosition1 = up;
+    lastNumberOfFreePosition2 = left;
+  }
+  buttonLastState = buttonState;
 }
 void lcdDisplayCharArray(byte direct, byte lastNumberOfFreePosition, int cursor_column, int cursor_row) {
   if (lastNumberOfFreePosition != direct && !id_not_found) {
-    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.write(0);
+    lcd.setCursor(0, 1);
+    lcd.write(1);
+    lcd.setCursor(1, 1);
+    lcd.write(2);
     char c[2] = {0x30, 0x30};
     byte index = 0;
     while (direct / 10) {
@@ -438,14 +470,15 @@ void lcdDisplayCharArray(byte direct, byte lastNumberOfFreePosition, int cursor_
       index++;
     }
     c[index] += direct;
+    //    Serial.print(c[1]); Serial.print(" "); Serial.print(c[0]);
     lcd.printstr(c, cursor_column, cursor_row);
-    char d[] = {'S','O',' ','C','H','O',' ','T','R','O','N','G'};
-    for(int i = 0; i < sizeof(d)/sizeof(d[0]); i++){
-      lcd.setCursor(i + Cursor_column + 1, cursor_row);
+    char d[] = {'C', 'H', 'O', ' ', 'T', 'R', 'O', 'N', 'G'};
+    for (int i = 0; i < sizeof(d) / sizeof(d[0]); i++) {
+      lcd.setCursor(i + cursor_column + 3, cursor_row);
       lcd.print(d[i]);
     }
+  }
 }
-
 void SerialPrint() {
   for (byte i = 0; i < 10; i++) {
     Serial.print(id_values[i].num0, HEX);
