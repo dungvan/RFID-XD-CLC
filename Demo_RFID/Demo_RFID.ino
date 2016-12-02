@@ -442,11 +442,12 @@ void lcdDisplay() {
     buttonLastState = buttonState;
     return;
   }
+  if (buttonLastState == 1)
+    lcd.clear();
   byte up = defaultNumberOfFreePosition + numberOfFreePosition1;
   byte left = defaultNumberOfFreePosition + numberOfFreePosition2;
-  if (lastNumberOfFreePosition1 != up && lastNumberOfFreePosition2 != left)
+  if (lastNumberOfFreePosition1 != up || lastNumberOfFreePosition2 != left)
   {
-    lcd.clear();
     lcdDisplayCharArray(up, lastNumberOfFreePosition1, 2, 0);
     lcdDisplayCharArray(left, lastNumberOfFreePosition2, 3, 1);
     lastNumberOfFreePosition1 = up;
