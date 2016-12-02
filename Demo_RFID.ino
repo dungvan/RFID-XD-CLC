@@ -2,6 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <SPI.h>
 #include <RFID.h>
+#include <Servo.h>
 
 #define SS_PIN 53
 #define RST_PIN 2
@@ -15,6 +16,8 @@
 #define green_out 47
 
 RFID rfid(SS_PIN, RST_PIN);
+
+Servo ServoIn, ServoOut;
 
 /*thay doi cau hinh led*/
 void change_led_position();
@@ -36,6 +39,10 @@ const byte lcdRows = 2;     // Number of lines
 //const byte lcdRows = 4;     // Number of lines
 
 LiquidCrystal_I2C lcd(lcdAddr, lcdCols, lcdRows);
+
+const int buttonPin = 49;
+int buttonState = 0;
+int buttonLastState = 0;
 
 byte upper[8] {
   B00100,
@@ -84,6 +91,8 @@ id_value id_values[10];
 byte numberOfCar = 0;
 byte fullList = 0;
 
+int pos_in = 180;
+int pos_out = 90;
 byte defaultNumberOfFreePosition = 5;
 byte numberOfFreePosition1 = 0;
 byte numberOfFreePosition2 = 0;
@@ -91,6 +100,9 @@ byte lastNumberOfFreePosition1 = 0;
 byte lastNumberOfFreePosition2 = 0;
 
 int save_id = 0;
+int remove_id = 0;
+int id_not_found = 0;
+
 byte in_door;
 byte out_door;
 byte temp_in_door = 1;
@@ -130,46 +142,117 @@ void setup()
     pinMode(green[index], OUTPUT);
     pinMode(pulse[index], INPUT);
   }
+  ServoIn.attach(12);
+  ServoOut.attach(13);
+  ServoIn.write(180);
+  ServoOut.write(90);
+
+  pinMode(buttonPin, INPUT);
+  
   SPI.begin();
   rfid.init();
 }
 
 void loop()
 {
+  Serial.println(digitalRead(49));
   lcdDisplay();
   change_led_position();
   if (rfid.isCard()) {
-    if (!in_door) {
-      readCard();
+    if (!out_door) {
+      byte out = 0;
+      readCard(out);
+    }
+    else if (!in_door) {
+      byte in = 1;
+      readCard(in);
     }
   }
   else {
+    if (remove_id) {
+      byte out = 0;
+      if (!out_door)
+      {
+        open_door(out);
+        //đảm bảo thẻ được tận dụng tại cửa ra
+        temp_value_out.num0 = 0;
+        temp_value_out.num0 = 1;
+        temp_value_out.num0 = 2;
+        temp_value_out.num0 = 3;
+        temp_value_out.num0 = 4;
+      }
+      else {
+        close_door(out);
+        remove_id = 0;
+      }
+    }
     if (save_id) {
-      open_door(in_door, out_door);
+      byte in = 1;
+      if (!in_door)
+      {
+        open_door(in);
+      }else {
+        close_door(in);
+        save_id = 0;
+      }
     }
   }
-  temp_in_door = in_door;
-  temp_out_door = out_door;
   rfid.halt();
 }
 
-void readCard() {
+void readCard(byte direct) {
+  //direct in = 1, direct out = 0
+  id_value temp_value;
+  if (direct) {
+    temp_value.num0 = temp_value_in.num0;
+    temp_value.num1 = temp_value_in.num1;
+    temp_value.num2 = temp_value_in.num2;
+    temp_value.num3 = temp_value_in.num3;
+    temp_value.num4 = temp_value_in.num4;
+  } else {
+    temp_value.num0 = temp_value_out.num0;
+    temp_value.num1 = temp_value_out.num1;
+    temp_value.num2 = temp_value_out.num2;
+    temp_value.num3 = temp_value_out.num3;
+    temp_value.num4 = temp_value_out.num4;
+  }
+
   if (rfid.readCardSerial()) {
-    if (fullList || (temp_value_in.num0 == rfid.serNum[0]
-                     && temp_value_in.num1 == rfid.serNum[1]
-                     && temp_value_in.num2 == rfid.serNum[2]
-                     && temp_value_in.num3 == rfid.serNum[3]
-                     && temp_value_in.num4 == rfid.serNum[4])) return;
+    if (fullList || (temp_value.num0 == rfid.serNum[0]
+                     && temp_value.num1 == rfid.serNum[1]
+                     && temp_value.num2 == rfid.serNum[2]
+                     && temp_value.num3 == rfid.serNum[3]
+                     && temp_value.num4 == rfid.serNum[4])) return;
     /* Hiển thị số ID của card */
     Serial.println(" ");
     Serial.println("Tim thay RFID Card");
-    temp_value_in.num0 = rfid.serNum[0];
-    temp_value_in.num1 = rfid.serNum[1];
-    temp_value_in.num2 = rfid.serNum[2];
-    temp_value_in.num3 = rfid.serNum[3];
-    temp_value_in.num4 = rfid.serNum[4];
-    temp_value_in.checkExitsInList = 1;
-    saveIdToList();
+    if (direct) {
+      temp_value_in.num0 = rfid.serNum[0];
+      temp_value_in.num1 = rfid.serNum[1];
+      temp_value_in.num2 = rfid.serNum[2];
+      temp_value_in.num3 = rfid.serNum[3];
+      temp_value_in.num4 = rfid.serNum[4];
+      if (checkIdFromList(direct) < 10) return;
+      temp_value_in.checkExitsInList = 1;
+      saveIdToList();
+      SerialPrint();
+    } else {
+      temp_value_out.num0 = rfid.serNum[0];
+      temp_value_out.num1 = rfid.serNum[1];
+      temp_value_out.num2 = rfid.serNum[2];
+      temp_value_out.num3 = rfid.serNum[3];
+      temp_value_out.num4 = rfid.serNum[4];
+      int check = checkIdFromList(direct);
+      if (check >= 10) return;
+      removeFromList(check);
+      //đảm bảo thẻ được tiếp tục tận dụng tại cửa vào
+      temp_value_in.num0 = 0;
+      temp_value_in.num1 = 0;
+      temp_value_in.num2 = 0;
+      temp_value_in.num3 = 0;
+      temp_value_in.num4 = 0;
+      SerialPrint();
+    }
     //Serial.println(" ");
     Serial.println("Ma Card:");
     Serial.print("Hex: ");
@@ -183,16 +266,35 @@ void readCard() {
     Serial.print(", ");
     Serial.print(rfid.serNum[4], HEX);
     Serial.println(" ");
-    save_id = 1;
   }
 }
 
-void open_door(byte in, byte out) {
-  if (in) {
-    Serial.print("----- mo cong vao");
+void open_door(byte direct) {
+  //direct in  = 1, direct out = 0
+  if (direct) {
+    for (pos_in; pos_in >= 87; pos_in -= 1) {
+      ServoIn.write(pos_in);
+    }
     numberOfCar++;
   }
-  else Serial.print("----- khong mo cong vao");
+  else {
+    for (pos_out; pos_out >= 0; pos_out -= 1) {
+      ServoOut.write(pos_out);
+    }
+    numberOfCar--;
+  }
+}
+void close_door(byte direct) {
+  delay(700);
+  if (direct){
+    for (pos_in; pos_in <= 180; pos_in += 1) {
+      ServoIn.write(pos_in);
+    }
+  }else{
+    for (pos_out; pos_out <= 85; pos_out += 1) {
+      ServoOut.write(pos_out);
+    }
+  }
 }
 
 void change_led_position() {
@@ -216,7 +318,6 @@ void change_led_position() {
     digitalWrite(red_in, LOW);
     digitalWrite(green_in, HIGH);
   } else {
-    if (save_id) save_id = 0;
     digitalWrite(red_in, HIGH);
     digitalWrite(green_in, LOW);
   }
@@ -239,37 +340,86 @@ void saveIdToList() {
       id_values[index].num4 = temp_value_in.num4;
       id_values[index].checkExitsInList = temp_value_in.checkExitsInList;
       numberOfCar++;
+      save_id = 1;
+      Serial.println(save_id);
       if (index == 9) fullList = 1;
       return;
     }
   }
   fullList = 1;
 }
-int checkIdFromList() {
-  byte index;
+int checkIdFromList(byte direct) {
+  //diect in = 1, direct out = 0
+  id_value  temp_value;
+  //init
+  if (direct) {
+    temp_value.num0 = temp_value_in.num0;
+    temp_value.num1 = temp_value_in.num1;
+    temp_value.num2 = temp_value_in.num2;
+    temp_value.num3 = temp_value_in.num3;
+    temp_value.num4 = temp_value_in.num4;
+  } else {
+    temp_value.num0 = temp_value_out.num0;
+    temp_value.num1 = temp_value_out.num1;
+    temp_value.num2 = temp_value_out.num2;
+    temp_value.num3 = temp_value_out.num3;
+    temp_value.num4 = temp_value_out.num4;
+  }
+  //check id from list
+  int result;
+  int index = 0;
   for (index; index < 10; index++) {
+    Serial.println(index);
     if (id_values[index].checkExitsInList
-        && id_values[index].num0 == temp_value_out.num0
-        && id_values[index].num1 == temp_value_out.num1
-        && id_values[index].num2 == temp_value_out.num2
-        && id_values[index].num3 == temp_value_out.num3
-        && id_values[index].num4 == temp_value_out.num4) {
-      return index;
+        && id_values[index].num0 == temp_value.num0
+        && id_values[index].num1 == temp_value.num1
+        && id_values[index].num2 == temp_value.num2
+        && id_values[index].num3 == temp_value.num3
+        && id_values[index].num4 == temp_value.num4) {
+      result = index;
+      break;
     }
   }
-  return -1;
+  return index;
 }
 void removeFromList(byte index) {
   if (index >= 0) {
     id_values[index].num0 = id_values[index].num1 = id_values[index].num2 = id_values[index].num3 = id_values[index].num4 = id_values[index].checkExitsInList = 0;
     fullList = 0;
+    remove_id = 1;
     return;
   }
   lcd.setCursor(0, 0);
   lcd.print("id not found!");
-  delay(1000);
+  id_not_found = 1;
 }
 void lcdDisplay() {
+  buttonState = digitalRead(buttonPin);
+  if(buttonState){
+    lastNumberOfFreePosition1 = lastNumberOfFreePosition2 = -1;
+    lcd.clear();
+    int n = numberOfCar; 
+    char c[] = {'T','O','N','G',' ','S','O',' ','X','E',':'};
+    for(int i; i < sizeof(c)/sizeof(c[0]); i++){
+      lcd.setCursor(i,0);
+      lcd.print(c[i]);
+    }
+    char d[] = {0x30, 0x30, 0x30, 0x30, 0x30};
+    int i = 0;
+    while(n / 10){
+      d[i] += n%10;
+      n/=10;
+      i++;
+    }
+    d[i] += n;
+    for(i; i >= 0; i--){
+      if(d[i] == 0x30) continue;
+      lcd.setCursor(i + sizeof(c)/sizeof(c[0]), 0);
+      lcd.print(d[i]);
+    }
+    buttonLastState = 1;
+    return;
+  }
   byte up = defaultNumberOfFreePosition + numberOfFreePosition1;
   lcdDisplayCharArray(up, lastNumberOfFreePosition1, 2, 0);
   lastNumberOfFreePosition1 = up;
@@ -278,7 +428,8 @@ void lcdDisplay() {
   lastNumberOfFreePosition2 = left;
 }
 void lcdDisplayCharArray(byte direct, byte lastNumberOfFreePosition, int cursor_column, int cursor_row) {
-  if (lastNumberOfFreePosition != direct) {
+  if (lastNumberOfFreePosition != direct && !id_not_found) {
+    lcd.clear();
     char c[2] = {0x30, 0x30};
     byte index = 0;
     while (direct / 10) {
@@ -288,17 +439,22 @@ void lcdDisplayCharArray(byte direct, byte lastNumberOfFreePosition, int cursor_
     }
     c[index] += direct;
     lcd.printstr(c, cursor_column, cursor_row);
-    char d[10] = {0x43, 0x20};
-    lcd.printstr(d, cursor_column += 2, cursor_row);
-    d[0] = 0x4F; d[1] = 0x48;
-    lcd.printstr(d, cursor_column += 2, cursor_row);
-    d[0] = 0x54; d[1] = 0x20;
-    lcd.printstr(d, cursor_column += 2, cursor_row);
-    d[0] = 0x4F; d[1] = 0x52;
-    lcd.printstr(d, cursor_column += 2, cursor_row);
-    d[0] = 0x47; d[1] = 0x4E;
-    lcd.printstr(d, cursor_column += 2, cursor_row);
-//    lcd.printstr(*(d+2), cursor_column + 2, cursor_row);
+    char d[] = {'S','O',' ','C','H','O',' ','T','R','O','N','G'};
+    for(int i = 0; i < sizeof(d)/sizeof(d[0]); i++){
+      lcd.setCursor(i + Cursor_column + 1, cursor_row);
+      lcd.print(d[i]);
+    }
+}
+
+void SerialPrint() {
+  for (byte i = 0; i < 10; i++) {
+    Serial.print(id_values[i].num0, HEX);
+    Serial.print(id_values[i].num1, HEX);
+    Serial.print(id_values[i].num2, HEX);
+    Serial.print(id_values[i].num3, HEX);
+    Serial.print(id_values[i].num4, HEX);
+    Serial.print("-");
   }
+  Serial.print("\n");
 }
 
