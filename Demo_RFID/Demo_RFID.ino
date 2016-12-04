@@ -180,10 +180,10 @@ void loop()
         open_door(out);
         //đảm bảo thẻ được tận dụng tại cửa ra
         temp_value_out.num0 = 0;
-        temp_value_out.num1 = 0;
-        temp_value_out.num2 = 0;
-        temp_value_out.num3 = 0;
-        temp_value_out.num4 = 0;
+        temp_value_out.num0 = 1;
+        temp_value_out.num0 = 2;
+        temp_value_out.num0 = 3;
+        temp_value_out.num0 = 4;
       }
       else {
         close_door(out);
@@ -287,8 +287,13 @@ void open_door(byte direct) {
     Serial.println(numberOfCar);
   }
   else {
-    for (pos_out; pos_out >= 0; pos_out -= 1)
+    for (pos_out; pos_out >= 0; pos_out -= 1) {
       ServoOut.write(pos_out);
+    }
+    if(!checkDecreaseNumberOfCar){
+       numberOfCar--;
+       checkDecreaseNumberOfCar = 1;
+    }
   }
 }
 void close_door(byte direct) {
@@ -299,8 +304,10 @@ void close_door(byte direct) {
     }
     checkIncreaseNumberOfCar = 0;
   } else {
-    for (pos_out; pos_out <= 85; pos_out += 1)
+    for (pos_out; pos_out <= 85; pos_out += 1) {
       ServoOut.write(pos_out);
+    }
+    checkDecreaseNumberOfCar = 0;
   }
 }
 
