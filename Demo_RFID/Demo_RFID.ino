@@ -302,7 +302,6 @@ void close_door(byte direct) {
     for (pos_out; pos_out <= 85; pos_out += 1) {
       ServoOut.write(pos_out);
     }
-    checkDecreaseNumberOfCar = 0;
   }
 }
 
