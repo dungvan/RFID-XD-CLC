@@ -426,9 +426,10 @@ void lcdDisplay() {
         i++;
       }
       d[i] += n;
+      int j = i;
       for (i; i >= 0; i--) {
         Serial.print(d[i]); Serial.print("\t");
-        lcd.setCursor(i + 12, 0);
+        lcd.setCursor(j - i + 12, 0);
         lcd.print(d[i]);
       }
 //      lastNumberOfCar = numberOfCar;
