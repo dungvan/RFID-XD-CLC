@@ -92,7 +92,6 @@ id_value id_values[10];
 int numberOfCar = 0;
 int lastNumberOfCar = 0;
 int checkIncreaseNumberOfCar = 0;
-int checkDecreaseNumberOfCar = 0;
 byte fullList = 0;
 
 int pos_in = 180;
@@ -289,10 +288,6 @@ void open_door(byte direct) {
   else {
     for (pos_out; pos_out >= 0; pos_out -= 1) {
       ServoOut.write(pos_out);
-    }
-    if(!checkDecreaseNumberOfCar){
-       numberOfCar--;
-       checkDecreaseNumberOfCar = 1;
     }
   }
 }
