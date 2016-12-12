@@ -27,9 +27,9 @@ void readCard();
 void open_door(byte in, byte out);
 void SerialPrint();
 
-byte red[10] = {3, 6, 9, 22, 25, 28, 31, 34, 37, 40};
-byte green[10] = {4, 7, 10, 23, 26, 29, 32, 35, 38, 41};
-byte pulse[] = {5, 8, 11, 24, 27, 30, 33, 36, 39, 42};
+byte red[10] = {3, 6, 9, 22, 25, 28, 31, 34, 37, 40};//các pin led đỏ
+byte green[10] = {4, 7, 10, 23, 26, 29, 32, 35, 38, 41};//các pin led xanh tương ứng
+byte pulse[] = {5, 8, 11, 24, 27, 30, 33, 36, 39, 42};//các pin cảm biết hồng ngoại tương ứng
 
 // LCD address and geometry and library initialization
 const byte lcdAddr = 0x3F;  // Address of I2C backpack
@@ -45,6 +45,7 @@ const int buttonPin = 49;
 int buttonState = 0;
 int buttonLastState = 0;
 
+//vẽ các mũi tên
 byte upper[8] {
   B00100,
   B01110,
@@ -78,6 +79,8 @@ byte lefter2[8] {
   B01000,
   B00000
 };
+
+//xây dựng prototype cho List
 typedef struct id_value {
   unsigned int num0;
   unsigned int num1;
@@ -88,7 +91,7 @@ typedef struct id_value {
 };
 id_value temp_value_in;
 id_value temp_value_out;
-id_value id_values[10];
+id_value id_values[10];//List
 int numberOfCar = 0;
 int lastNumberOfCar = 0;
 int checkIncreaseNumberOfCar = 0;
@@ -203,6 +206,13 @@ void loop()
   rfid.halt();
 }
 
+
+
+
+/******************thủ tục đọc thẻ*********************
+ * input : direct  = 1 : đọc thẻ cho xe vào bãi       *
+ * direct = 0 : đọc thẻ cho xe ra khỏi bãi            *
+ ******************************************************/
 void readCard(byte direct) {
   //direct in = 1, direct out = 0
   id_value temp_value;
@@ -272,25 +282,37 @@ void readCard(byte direct) {
   }
 }
 
+
+/*************Thủ tục mở cổng****************
+ * input : direct = 1 : mở cổng vào         *
+ * direct = 0 : mở cổng ra                  *
+ ********************************************/
 void open_door(byte direct) {
   //direct in  = 1, direct out = 0
   if (direct) {
+    //mở cổng vào
     for (pos_in; pos_in >= 87; pos_in -= 1) {
       ServoIn.write(pos_in);
     }
     if (!checkIncreaseNumberOfCar){
-      numberOfCar++;
+      numberOfCar++;//tăng tổng số xe đã vào bãi lên 1 đơn vị
       checkIncreaseNumberOfCar = 1;
     }
     Serial.print("\t\t");
     Serial.println(numberOfCar);
   }
   else {
+    //mở cổng ra
     for (pos_out; pos_out >= 0; pos_out -= 1) {
       ServoOut.write(pos_out);
     }
   }
 }
+
+/*************Thủ tục đóng cổng**************
+ * input : direct = 1 : đóng cổng vào       *
+ * direct = 0 : đóng cổng ra                *
+ ********************************************/
 void close_door(byte direct) {
   delay(700);
   if (direct) {
@@ -305,9 +327,15 @@ void close_door(byte direct) {
   }
 }
 
+/**************************************
+ * cập nhật đèn báo hiệu tại mỗi vị trí
+ * vị trí trống : bật đèn xanh(green)  
+ * vị trí đã có xe : bật đèn đỏ (red)
+ **************************************/
 void change_led_position() {
   byte index = 0;
   numberOfFreePosition1 = numberOfFreePosition2 = 0;
+  //xét tại các vị trí đỗ xe
   while (index < 10) {
     if (digitalRead(pulse[index])) {
       if (index < 5) numberOfFreePosition2++;
@@ -320,6 +348,8 @@ void change_led_position() {
     }
     index++;
   }
+
+  //xét tại cửa ra-vào
   in_door = digitalRead(pulse_in);
   out_door = digitalRead(pulse_out);
   if (in_door) {
@@ -337,6 +367,10 @@ void change_led_position() {
     digitalWrite(green_out, LOW);
   }
 }
+/**************Thủ tục lưu giá trị thẻ vào List***************
+ * thẻ đọc được thuộc kiểu id_value là đối tượng temp_value_in
+ * tìm kiếm vị trí còn trống trong List id_values(vị trí index) 
+ * và gán từng giá trị trong temp_value_in cho List************/
 void saveIdToList() {
   byte index = 0;
   for (index; index < 10; index++) {
@@ -353,8 +387,15 @@ void saveIdToList() {
       return;
     }
   }
-  fullList = 1;
+  fullList = 1;//nếu index vượt quá độ dài List (tương đương số chỗ trong bãi đỗ xe) thì set cờ fullList = 1
 }
+
+/****************************Hàm trả về index của thẻ trong List*********************************
+ * input : direct = 1 : dùng temp_value_in làm biến tạm khi thẻ vừa đọc xong dùng cho cổng vào
+ * direct = 0 : dùng temp_value_out làm biến tạm khi thẻ vừa đọc xong dùng cho cổng ra
+ * trả về index nếu các giá trị trong id_values[index] và temp_value là như nhau
+ * trả về số phần tử tối đa trong List nếu không có phần tử nào trong List thỏa mãn điều kiện trện
+ *************************************************************************************************/
 int checkIdFromList(byte direct) {
   //diect in = 1, direct out = 0
   id_value  temp_value;
@@ -389,6 +430,12 @@ int checkIdFromList(byte direct) {
   }
   return index;
 }
+
+
+/***************Thủ tục xóa phần tử trong List***************
+ * các giá trị trong phần tử index của List được set bằng 0
+ * set cờ fullList = 0 và cờ remove_id = 1
+ * **********************************************************/
 void removeFromList(byte index) {
   if (index >= 0) {
     id_values[index].num0 = id_values[index].num1 = id_values[index].num2 = id_values[index].num3 = id_values[index].num4 = id_values[index].checkExitsInList = 0;
@@ -400,6 +447,14 @@ void removeFromList(byte index) {
   lcd.print("id not found!");
   id_not_found = 1;
 }
+
+/*******************Thủ tục Hiển thị trên LCD**********************
+ * Nếu trạng thái nút bấm (button) được nhấn (1) thì hiển thị tổng
+ * số xe ra vào bãi từ lúc bắt đầu hệ thống (hoặc từ lúc khởi động
+ * lại hệ thống.
+ * Nếu trạng thái nút bấm là không được nhấn (0) thì tính toán và
+ * gọi hàm hiển thị tổng số chỗ trống và chỉ hướng
+ ******************************************************************/
 void lcdDisplay() {
   buttonState = digitalRead(buttonPin);
   if (buttonState) {
@@ -450,6 +505,8 @@ void lcdDisplay() {
   }
   buttonLastState = buttonState;
 }
+
+//Hiển thị số chỗ trống
 void lcdDisplayCharArray(byte direct, byte lastNumberOfFreePosition, int cursor_column, int cursor_row) {
   if (lastNumberOfFreePosition != direct && !id_not_found) {
     lcd.setCursor(0, 0);
